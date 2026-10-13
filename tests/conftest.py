@@ -48,15 +48,20 @@ from solar_system import (
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
-HEADLESS_MODEL_FILES: tuple[str, ...] = (
-    "__init__.py",
+HEADLESS_MODEL_MODULES: tuple[str, ...] = (
     "vector.py",
     "kepler.py",
     "frames.py",
     "bodies.py",
     "trail.py",
     "simulation.py",
+    "scaling.py",
     "scenes.py",
+)
+
+HEADLESS_MODEL_FILES: tuple[str, ...] = (
+    "__init__.py",
+    *HEADLESS_MODEL_MODULES,
 )
 
 
@@ -91,9 +96,8 @@ def test_headless_model_modules_contain_zero_pygame_imports() -> None:
     package_dir = Path(solar_system.__file__).resolve().parent
     offending_imports: list[str] = []
 
+    assert len(HEADLESS_MODEL_MODULES) == 8
     files_to_audit = list(HEADLESS_MODEL_FILES)
-    if (package_dir / "scaling.py").is_file() and "scaling.py" not in files_to_audit:
-        files_to_audit.append("scaling.py")
 
     for filename in files_to_audit:
         file_path = package_dir / filename
