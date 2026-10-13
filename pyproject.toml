@@ -21,6 +21,7 @@ solar-system = "solar_system.main:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+python_files = ["test_*.py", "conftest.py"]
 
 [tool.coverage.run]
 source = ["solar_system"]
