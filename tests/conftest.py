@@ -13,6 +13,7 @@ import solar_system
 import solar_system.bodies as bodies_mod
 import solar_system.frames as frames_mod
 import solar_system.kepler as kepler_mod
+import solar_system.scenes as scenes_mod
 import solar_system.simulation as simulation_mod
 import solar_system.trail as trail_mod
 import solar_system.vector as vector_mod
@@ -20,11 +21,17 @@ from solar_system import (
     KIRKWOOD_GAPS,
     SPEED_LADDER_DAYS_PER_SEC,
     CelestialBody,
+    InputEvent,
     KirkwoodGap,
     OrbitalElements,
     OrbitPoint,
+    PausedScene,
     ReferenceFrame,
+    SceneFSM,
+    SceneState,
+    SimulationScene,
     SimulationState,
+    TitleScene,
     TrailBuffer,
     Vec3,
     VisualStyle,
@@ -49,6 +56,7 @@ HEADLESS_MODEL_FILES: tuple[str, ...] = (
     "bodies.py",
     "trail.py",
     "simulation.py",
+    "scenes.py",
 )
 
 
@@ -83,7 +91,11 @@ def test_headless_model_modules_contain_zero_pygame_imports() -> None:
     package_dir = Path(solar_system.__file__).resolve().parent
     offending_imports: list[str] = []
 
-    for filename in HEADLESS_MODEL_FILES:
+    files_to_audit = list(HEADLESS_MODEL_FILES)
+    if (package_dir / "scaling.py").is_file() and "scaling.py" not in files_to_audit:
+        files_to_audit.append("scaling.py")
+
+    for filename in files_to_audit:
         file_path = package_dir / filename
         assert file_path.is_file(), f"Missing expected headless model module: {file_path}"
         source = file_path.read_text(encoding="utf-8")
@@ -112,7 +124,7 @@ def test_public_api_exports_and_default_simulation_fixture(
     frame_registry: dict[str, ReferenceFrame],
     default_simulation: SimulationState,
 ) -> None:
-    """Verify all 19 public model exports + __version__ in solar_system.__all__ and fixtures."""
+    """Verify all 25 core public model exports + __version__ in solar_system.__all__ and fixtures."""
     expected_map: dict[str, object] = {
         "__version__": "0.1.0",
         "Vec3": vector_mod.Vec3,
@@ -134,7 +146,29 @@ def test_public_api_exports_and_default_simulation_fixture(
         "TrailBuffer": trail_mod.TrailBuffer,
         "SimulationState": simulation_mod.SimulationState,
         "SPEED_LADDER_DAYS_PER_SEC": simulation_mod.SPEED_LADDER_DAYS_PER_SEC,
+        "SceneState": scenes_mod.SceneState,
+        "InputEvent": scenes_mod.InputEvent,
+        "TitleScene": scenes_mod.TitleScene,
+        "SimulationScene": scenes_mod.SimulationScene,
+        "PausedScene": scenes_mod.PausedScene,
+        "SceneFSM": scenes_mod.SceneFSM,
     }
+
+    try:
+        import solar_system.scaling as scaling_mod
+    except ImportError:
+        pass
+    else:
+        expected_map.update(
+            {
+                "DisplayScaleConfig": scaling_mod.DisplayScaleConfig,
+                "heliocentric_distance_to_px": scaling_mod.heliocentric_distance_to_px,
+                "moon_distance_to_px": scaling_mod.moon_distance_to_px,
+                "body_display_radius_px": scaling_mod.body_display_radius_px,
+                "world_to_screen": scaling_mod.world_to_screen,
+                "sample_orbit_screen_points": scaling_mod.sample_orbit_screen_points,
+            }
+        )
 
     assert set(solar_system.__all__) == set(expected_map.keys())
     for name, expected_obj in expected_map.items():
@@ -142,6 +176,12 @@ def test_public_api_exports_and_default_simulation_fixture(
         assert actual_obj is expected_obj or actual_obj == expected_obj
 
     assert Vec3 is vector_mod.Vec3
+    assert SceneState is scenes_mod.SceneState
+    assert InputEvent is scenes_mod.InputEvent
+    assert TitleScene is scenes_mod.TitleScene
+    assert SimulationScene is scenes_mod.SimulationScene
+    assert PausedScene is scenes_mod.PausedScene
+    assert SceneFSM is scenes_mod.SceneFSM
     assert OrbitalElements is kepler_mod.OrbitalElements
     assert solve_kepler is kepler_mod.solve_kepler
     assert keplerian_to_cartesian is kepler_mod.keplerian_to_cartesian
