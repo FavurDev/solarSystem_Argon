@@ -204,8 +204,8 @@ class SolarSystemRenderer:
             show_first_light_only=show_first_light_only,
         )
 
-        # Layer 3: Heliocentric static orbital paths
-        if sim.show_orbits and not show_first_light_only:
+        # Layer 3: Heliocentric static orbital paths (including First Light per MAC-1)
+        if sim.show_orbits:
             self._draw_heliocentric_orbits(cfg=cfg, bodies_map=bodies_map)
 
         # Layer 4: Fading historical trajectory polylines on pre-allocated _trail_surface
@@ -492,7 +492,13 @@ class SolarSystemRenderer:
         self._overlay_surface.fill((0, 0, 0, 0))
         panel_rect = pygame.Rect(16, 16, 360, 178)
         pygame.draw.rect(self._overlay_surface, HUD_PANEL_RGBA, panel_rect, border_radius=8)
-        pygame.draw.rect(self._overlay_surface, MODAL_BORDER_RGBA, panel_rect, width=1, border_radius=8)
+        pygame.draw.rect(
+            self._overlay_surface,
+            MODAL_BORDER_RGBA,
+            panel_rect,
+            width=1,
+            border_radius=8,
+        )
         self._surface.blit(self._overlay_surface, (0, 0))
 
         iso_date = jd_to_iso_date(sim.julian_date)
@@ -501,71 +507,93 @@ class SolarSystemRenderer:
         dir_sign = int(sim.direction)
         dir_text = "FORWARD (+1)" if dir_sign >= 0 else "REVERSE (-1)"
         dir_color = DIRECTION_FORWARD_RGB if dir_sign >= 0 else DIRECTION_REVERSE_RGB
-        run_status = "PAUSED" if (sim.paused or active_scene == SceneState.PAUSED) else "RUNNING"
+        signed_rate = sim.current_speed_days_per_sec * (1.0 if dir_sign >= 0 else -1.0)
 
         hud_lines: list[tuple[str, tuple[int, int, int]]] = [
-            (f"Epoch     : {iso_date} (JD {sim.julian_date:.2f})", (235, 240, 255)),
-            (f"Elapsed   : {elapsed_days:+.1f} d ({elapsed_years:+.2f} yr)", (205, 215, 240)),
-            (f"Direction : {dir_text}", dir_color),
-            (f"Rate      : {sim.current_speed_days_per_sec:g} d/s", (205, 215, 240)),
-            (f"State     : {run_status} [{active_scene.name}]", (205, 215, 240)),
-            (f"Frame     : {sim.active_frame_name}", (180, 200, 235)),
+            (f"Epoch: {iso_date} (JD {sim.julian_date:.2f})", (235, 240, 255)),
+            (f"Elapsed: {elapsed_days:+.1f} d ({elapsed_years:+.2f} yr)", (205, 215, 240)),
+            (f"Direction: {dir_text}", dir_color),
+            (f"Rate: {signed_rate:+.2f} d/s", dir_color),
+            (f"Scene: {active_scene.name}", (205, 215, 240)),
+            (f"Focus: {sim.active_frame_name}", (180, 200, 235)),
         ]
         for idx, (text_line, line_color) in enumerate(hud_lines):
             text_surf = self._font_hud.render(text_line, True, line_color)
             self._surface.blit(text_surf, (28, 26 + idx * 24))
 
         legend_text = (
-            "[Space/P] Pause  [R] Reverse  [+/-] Speed  [1-5] Presets  "
-            "[O] Orbits  [T] Trails  [K] Kirkwood  [L] Labels  [H] HUD"
+            "SPACE: Reverse | P: Pause | +/-: Speed | R: Reset | TAB: Frame | "
+            "1-5: Presets | ESC: Quit"
         )
-        legend_surf = self._font_small.render(legend_text, True, (165, 180, 215))
-        self._surface.blit(legend_surf, (16, self._surface.get_height() - 26))
+        legend_surf = self._font_small.render(legend_text, True, (205, 215, 240))
+        self._surface.blit(legend_surf, (14, self._surface.get_height() - 24))
 
     def _draw_scene_overlay(self, *, active_scene: SceneState) -> None:
-        """Render Layer 8: upper-viewport banner for TITLE and PAUSED scene states."""
+        """Render Layer 8: modal overlay banner for TITLE and PAUSED scene states."""
         self._overlay_surface.fill((0, 0, 0, 0))
         width = self._surface.get_width()
 
         if active_scene == SceneState.TITLE:
-            banner_x = int((width - 680) * 0.5)
-            banner_rect = pygame.Rect(banner_x, 64, 680, 150)
-            pygame.draw.rect(self._overlay_surface, MODAL_BACKDROP_RGBA, banner_rect, border_radius=12)
-            pygame.draw.rect(self._overlay_surface, MODAL_BORDER_RGBA, banner_rect, width=2, border_radius=12)
+            banner_x = int((width - 760) * 0.5)
+            banner_rect = pygame.Rect(banner_x, 35, 760, 150)
+            pygame.draw.rect(
+                self._overlay_surface,
+                MODAL_BACKDROP_RGBA,
+                banner_rect,
+                border_radius=8,
+            )
+            pygame.draw.rect(
+                self._overlay_surface,
+                MODAL_BORDER_RGBA,
+                banner_rect,
+                width=1,
+                border_radius=8,
+            )
             self._surface.blit(self._overlay_surface, (0, 0))
 
-            title_surf = self._font_title.render("SOLAR SYSTEM KEPLERIAN ORRERY", True, (255, 230, 140))
+            title_surf = self._font_title.render("Favur - Solar System", True, (255, 230, 140))
             sub_surf = self._font_hud.render(
-                "31 Celestial Bodies | Analytical Kepler + Time Reversal | Hybrid Log Scaling",
+                "25 J2000 Bodies & 360 Main-Belt Asteroids | Analytical Kepler + Time Reversal",
                 True,
                 (210, 222, 248),
             )
             prompt_surf = self._font_hud.render(
-                "Press [ENTER] or [SPACE] to Enter Interactive Simulation",
+                "Press ENTER to Start Simulation",
                 True,
-                (120, 235, 165),
+                DIRECTION_REVERSE_RGB,
             )
             title_x = int((width - title_surf.get_width()) * 0.5)
             sub_x = int((width - sub_surf.get_width()) * 0.5)
             prompt_x = int((width - prompt_surf.get_width()) * 0.5)
-            self._surface.blit(title_surf, (title_x, 82))
-            self._surface.blit(sub_surf, (sub_x, 128))
-            self._surface.blit(prompt_surf, (prompt_x, 164))
+            self._surface.blit(title_surf, (title_x, 52))
+            self._surface.blit(sub_surf, (sub_x, 98))
+            self._surface.blit(prompt_surf, (prompt_x, 134))
         elif active_scene == SceneState.PAUSED:
-            banner_x = int((width - 460) * 0.5)
-            banner_rect = pygame.Rect(banner_x, 68, 460, 108)
-            pygame.draw.rect(self._overlay_surface, MODAL_BACKDROP_RGBA, banner_rect, border_radius=10)
+            banner_x = int((width - 680) * 0.5)
+            banner_rect = pygame.Rect(banner_x, 55, 680, 130)
+            pygame.draw.rect(
+                self._overlay_surface,
+                MODAL_BACKDROP_RGBA,
+                banner_rect,
+                border_radius=8,
+            )
             pause_border_rgba = (*DIRECTION_REVERSE_RGB, 230)
-            pygame.draw.rect(self._overlay_surface, pause_border_rgba, banner_rect, width=2, border_radius=10)
+            pygame.draw.rect(
+                self._overlay_surface,
+                pause_border_rgba,
+                banner_rect,
+                width=1,
+                border_radius=8,
+            )
             self._surface.blit(self._overlay_surface, (0, 0))
 
-            pause_surf = self._font_title.render("SIMULATION PAUSED", True, DIRECTION_REVERSE_RGB)
+            pause_surf = self._font_title.render("PAUSED", True, DIRECTION_REVERSE_RGB)
             resume_surf = self._font_hud.render(
-                "Press [SPACE] or [P] to Resume | [R] Reverse Time",
+                "Press P or ENTER to Resume | SPACE to Reverse | +/- Speed | ESC to Quit",
                 True,
                 (225, 232, 250),
             )
             pause_x = int((width - pause_surf.get_width()) * 0.5)
             resume_x = int((width - resume_surf.get_width()) * 0.5)
-            self._surface.blit(pause_surf, (pause_x, 84))
-            self._surface.blit(resume_surf, (resume_x, 132))
+            self._surface.blit(pause_surf, (pause_x, 76))
+            self._surface.blit(resume_surf, (resume_x, 128))
